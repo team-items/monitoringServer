@@ -1,6 +1,5 @@
 # MissionControl-Server
 
+## Used Plugins (Required for installation, needed to be bundled in release versions)
 
-
-#Used Plugins (Required for installation, needed to be bundled in release versions)
-termcolor
+https://github.com/PhilipTrauner/TurboConf
