@@ -6,95 +6,59 @@ import socket
 import base64
 
 #Own Libraries
-from mclib import *
+import Logging
+from TurboConf import Config
 
-#Third Party Libraries
-from termcolor import colored
-
-class MissionControl():
-	CONFIGPATH = "config.conf";
-	PORT = 62626;
-	SAMPLERATE = 0.01;
-
-	HOST = '';
-	BACKLOG = 10;
-	SIZE = 2048;
-	SERVER = None;
-
-	INPUT = None; #list of inputs
-	OUTPUT = None; #list of sockets ready for output
-
-	#Setup functions 
-	def setUpConfig(self, configs):
-		try:
-			settings = json.loads(configs);
-
-			if("Server" in settings.keys()):
-				serversettings = settings["Server"];
-				serverkeys = serversettings.keys();
-
-				if("Port" in serverkeys):
-					self.PORT = serversettings["Port"];
-				else:
-					printWarning("Missing Port in Config File, using 62626");
-				
-				if("Samplerate" in serverkeys):
-					self.SAMPLERATE = serversettings["Samplerate"];
-				else:
-					printWarning("Missing Samplerate in Config File, using 0.01s");
-			else:
-				printError("Invalid Configfile.");
-				printWarning("Using default values only.");
-		except ValueError as e:
-			printError("Invalid Configfile.");
-			printWarning("Using default values only.");
-		
-	def printStartupConfig(self):
-		printInfo("Config used: "+`self.CONFIGPATH`);
-		printInfo("Port used: "+`self.PORT`);
-		printInfo("Samplerate used: "+`self.SAMPLERATE`);
-
-
-	def setUpServer(self):
-		try:
-			self.SERVER = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
-			self.SERVER.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1);
-			self.SERVER.bind((self.HOST, self.PORT));
-			self.SERVER.listen(self.BACKLOG);
-			printSuccess("Socket set up");
-		except socket.error:
-			if self.SERVER:
-				self.SERVER.close();
-			printError("Could not open socket: "+sys.exc_info()[1]);
-			sys.exit(1);
-
-		self.INPUT = [self.SERVER];
-		self.OUTPUT = [];
-
-		printSuccess("Finished setting up Server");
-
-	#Constructor
+class MissionControl:
 	def __init__(self):
+		self.config_path = "config.conf"
+		# Config parsing
+		config = Config(warnings=True)
+		config.add_option("port", default_value=62626)
+		config.add_option("samplerate", default_value=0.01)
+		config.add_option("host", default_value="")
+		config.add_option("backlog", default_value=10)
 		try:
-			configfile = open(self.CONFIGPATH, 'r');
-			self.setUpConfig(configfile.read());
-		except IOError as e:
-			printError("No config file found.");
-			printWarning("Proceeding with default values");
+			cfg = config.read_config(open(self.config_path, "r").read())
+		except IOError:
+			raw_config = config.get_config()
+			open(self.config_path, "w").write(config.get_config())
+			cfg = config.read_config(raw_config)
+		self.port = cfg["port"]
+		self.samplerate = cfg["samplerate"]
+		self.host = cfg["host"]
+		self.backlog = cfg["backlog"]
+		print(self)
+		self.create_server()
+	
+	def __repr__(self):
+		return "Config used: %s\n Port used: %s\n Samplerate used: %s" % (self.config_path, self.port, self.samplerate)
 
-		self.printStartupConfig();
-		printInfo("Setting up server");
-		self.setUpServer();
 
-	#Running Functions
+	def create_server(self):
+		server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		try:
+			server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+			server.bind((self.host, self.port))
+			server.listen(self.backlog)
+			Logging.success("Socket set up")
+		except socket.error:
+			server.close()
+			Logging.error("Could not open socket: %s" % sys.exc_info[1])
+
+		self.input = [server]
+		self.output = []
+
+		Logging.success("Finished setting up Server")
+
+
 	def run(self):
-		running = True;
-		printSuccess("Server up and running");
+		Logging.success("Server up and running")
 
-		while running:
-			inputready, outputready, exceptready = select.select(self.INPUT, self.OUTPUT, []);
-
+		while 1:
+			inputready, outputready, exceptready = select.select(self.input, self.output, [])
 
 
-mc = MissionControl();
-mc.run();
+
+mc = MissionControl()
+mc.run()
